@@ -20,23 +20,23 @@ interface IERC20 {
 contract ChainMasterX {
     address private owner;
     IUniswapV2Router02 public pancakeRouter;
-    IUniswapV2Router02 public babyRouter;
+    IUniswapV2Router02 public bakeryRouter;
     ISwapRouter public pancakeV3Router;
     // Pancake 0x10ED43C718714eb63d5aA57B78B54704E256024E V2
     // Baby 0x325E343f1dE602396E256B67eFd1F61C3A6B38Bd V2 
     // Pancake 0x1b81D678ffb9C0263b24A97847620C99d213eB14 V3
 
 
-    constructor(address _babyRouter, address _pancakeRouter, address _pancakeV3) {
-        babyRouter = IUniswapV2Router02(_babyRouter);
+    constructor(address _bakeryRouter, address _pancakeRouter, address _pancakeV3) {
+        bakeryRouter = IUniswapV2Router02(_bakeryRouter);
         pancakeRouter = IUniswapV2Router02(_pancakeRouter);
         pancakeV3Router = ISwapRouter(_pancakeV3);
         owner = msg.sender;
     }
     
-    function setbabyRouter(address _babyRouter) external {
+    function setBakeryRouter(address _bakeryRouter) external {
         require(msg.sender == owner, "Caller is not the owner");
-        babyRouter = IUniswapV2Router02(_babyRouter);
+        bakeryRouter = IUniswapV2Router02(_bakeryRouter);
     }
 
     function setPancakeRouter(address _pancakeRouter) external {
@@ -53,9 +53,9 @@ contract ChainMasterX {
         uint[] memory amounts = pancakeRouter.swapExactTokensForTokens(amountIn, 0, path0, address(this), deadline);
         amountIn = amounts[amounts.length - 1];
 
-        // approve token to babyRouter
-        IERC20(approves[1]).approve(address(babyRouter), amountIn);
-        amounts = babyRouter.swapExactTokensForTokens(amountIn, 0, path1, address(this), deadline);
+        // approve token to bakeryRouter
+        IERC20(approves[1]).approve(address(bakeryRouter), amountIn);
+        amounts = bakeryRouter.swapExactTokensForTokens(amountIn, 0, path1, address(this), deadline);
         amountIn = amounts[amounts.length - 1];
 
         // approve token to PancakeRouter again
@@ -79,6 +79,89 @@ contract ChainMasterX {
         // approve token to the Router
         IERC20(approve).approve(address(pancakeRouter), _amountIn);
         uint[] memory amounts = pancakeRouter.swapExactTokensForTokens(_amountIn, amountOut, path, address(this), deadline);
+
+        uint amountIn = amounts[amounts.length - 1];
+
+        IERC20(tokenV3In).approve(address(pancakeV3Router), amountIn);
+
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
+            .ExactInputSingleParams({
+                tokenIn: tokenV3In,
+                tokenOut: tokenV3Out,
+                fee: _poolFee,
+                recipient: address(this),
+                deadline: deadline,
+                amountIn: amountIn,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            });
+
+        pancakeV3Router.exactInputSingle(params);
+
+    }
+
+    
+    function customV2toV2(IUniswapV2Router02 routerOne,IUniswapV2Router02 routerTwo,uint _amountIn, address[] calldata path_one, address[] calldata path_two, address[] calldata approve) external {
+        require(msg.sender == owner, "Caller is not the owner");
+        uint deadline = block.timestamp + 12000; // 2 hours from now
+
+        IERC20(approve[0]).approve(address(routerOne), _amountIn);
+        uint[] memory amounts = routerOne.swapExactTokensForTokens(_amountIn, 0, path_one, address(this), deadline);
+        uint amountIn = amounts[amounts.length - 1];
+        IERC20(approve[1]).approve(address(routerTwo), amountIn);
+        routerTwo.swapExactTokensForTokens(amountIn, 0, path_two, address(this), deadline);
+
+    }
+    
+   
+    function pancakeV3toV2(uint _amountIn, address[] calldata path,address approve,address tokenV3In, address tokenV3Out, uint24 _poolFee) external {
+        require(msg.sender == owner, "Caller is not the owner");
+        uint deadline = block.timestamp + 12000; // 2 hours from now        
+        IERC20(tokenV3In).approve(address(pancakeV3Router), _amountIn);
+
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
+            .ExactInputSingleParams({
+                tokenIn: tokenV3In,
+                tokenOut: tokenV3Out,
+                fee: _poolFee,
+                recipient: address(this),
+                deadline: deadline,
+                amountIn: _amountIn,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            });
+        uint amountOut = pancakeV3Router.exactInputSingle(params);
+        IERC20(approve).approve(address(pancakeRouter), amountOut);
+        pancakeRouter.swapExactTokensForTokens(amountOut, 0, path, address(this), deadline);
+    }
+
+    function pancakeV3toCustomV2(uint _amountIn,IUniswapV2Router02 routerOne, address[] calldata path,address approve,address tokenV3In, address tokenV3Out, uint24 _poolFee) external {
+        require(msg.sender == owner, "Caller is not the owner");
+        uint deadline = block.timestamp + 12000; // 2 hours from now        
+        IERC20(tokenV3In).approve(address(pancakeV3Router), _amountIn);
+
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
+            .ExactInputSingleParams({
+                tokenIn: tokenV3In,
+                tokenOut: tokenV3Out,
+                fee: _poolFee,
+                recipient: address(this),
+                deadline: deadline,
+                amountIn: _amountIn,
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            });
+        uint amountOut = pancakeV3Router.exactInputSingle(params);
+        IERC20(approve).approve(address(routerOne), amountOut);
+        routerOne.swapExactTokensForTokens(amountOut, 0, path, address(this), deadline);
+    }
+    function customV2toV3(uint _amountIn, IUniswapV2Router02 routerOne, uint amountOut, address[] calldata path,address approve,address tokenV3In, address tokenV3Out, uint24 _poolFee) external {
+        require(msg.sender == owner, "Caller is not the owner");
+        uint deadline = block.timestamp + 12000; // 2 hours from now
+
+        // approve token to the Router
+        IERC20(approve).approve(address(routerOne), _amountIn);
+        uint[] memory amounts = routerOne.swapExactTokensForTokens(_amountIn, amountOut, path, address(this), deadline);
 
         uint amountIn = amounts[amounts.length - 1];
 
